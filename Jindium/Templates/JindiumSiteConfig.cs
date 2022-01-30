@@ -15,6 +15,7 @@ namespace Jindium
         public string SiteDescription { get; set; }
         public string SiteAuthor { get; set; }
         public string phpPath { get; set; }
+        public string CompileFolder { get; set; }
 
         public JindiumCompilerConfig()
         {
@@ -23,6 +24,7 @@ namespace Jindium
             this.SiteDescription = "Just another Jindium Server";
             this.SiteAuthor = "Jindium";
             this.phpPath = "php";
+            this.CompileFolder = "CONTENT";
         }
     }
 }

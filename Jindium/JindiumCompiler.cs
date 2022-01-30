@@ -5,7 +5,7 @@ using System.IO;
 
 namespace Jindium
 {
-    class JindiumCompiler
+    public partial class JindiumCompiler
     {
         //Path of website to convert to Jindium
         public JindiumCompiler(string path)
@@ -15,7 +15,7 @@ namespace Jindium
 
         public string Path { get; set; }
 
-        private JindiumCompilerConfig ComplieConfig = new JindiumCompilerConfig();
+        public JindiumCompilerConfig ComplieConfig = new JindiumCompilerConfig();
 
         private List<JindiumFile> Files = new List<JindiumFile>();
 
@@ -81,7 +81,7 @@ namespace Jindium
             else
             {
                 cText.WriteLine($"Warning: No Jindium config file found! Creating one...", "JindiumCompiler", ConsoleColor.Yellow);
-                File.WriteAllText(Path + "\\jindium.config", StaticResp.NewJindiumConfigFile());
+                File.WriteAllText(Path + "\\jindium.config", StaticResp.NewJindiumConfigFile(ComplieConfig));
             }
 
             List<string> existingPaths = new List<string>();
@@ -102,19 +102,39 @@ namespace Jindium
                 }
 
                 JindiumFile.MimeType = General.GetMimeType(fileInfo.Extension);
-                
-                //Minify the file if it is a CSS or JS file.
-                switch (JindiumFile.MimeType)
+
+                if (JindiumFile.MimeType.StartsWith("text/") || JindiumFile.MimeType.StartsWith("application/"))
                 {
-                    case "text/css":
-                        JindiumFile.Data = Encoding.UTF8.GetBytes(Minify.CSS(File.ReadAllText(file)));
-                        break;
-                    case "application/x-javascript":
-                        JindiumFile.Data = Encoding.UTF8.GetBytes(Minify.JavaScript(File.ReadAllText(file)));
-                        break;
-                    default:
-                        JindiumFile.Data = File.ReadAllBytes(file);
-                        break;
+                    //Minify the file if it is a CSS or JS file.
+                    switch (JindiumFile.MimeType)
+                    {
+                        case "text/css":
+                            JindiumFile.Data = Encoding.UTF8.GetBytes(Minify.CSS(File.ReadAllText(file)));
+                            break;
+                        case "application/x-javascript":
+                            JindiumFile.Data = Encoding.UTF8.GetBytes(Minify.JavaScript(File.ReadAllText(file)));
+                            break;
+                        default:
+                            JindiumFile.Data = File.ReadAllBytes(file);
+                            break;
+                    }
+                }
+                else
+                {
+                    JindiumFile.Data = null;
+                    string relativePath = file.Replace(Path, "");
+
+                    //Check if content folder exists, if not create it.
+                    if (!Directory.Exists("content"))
+                        Directory.CreateDirectory("content");
+
+                    string newPath = ComplieConfig.CompileFolder + relativePath;
+                    JindiumFile.FullPath = newPath;
+
+                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(newPath));
+
+                    //Copy the file to the content folder.
+                    File.Copy(file, newPath, true); 
                 }
 
                 file = file.Replace(Path, "");
@@ -130,7 +150,10 @@ namespace Jindium
 
                 existingPaths.Add(JindiumFile.Path);
 
-                cText.WriteLine($"Processing file '{file}'...", "JindiumCompiler", ConsoleColor.Cyan);
+                if (JindiumFile.Data == null)
+                    cText.WriteLine($"Processing reference file '{file}'...", "JindiumCompiler", ConsoleColor.Cyan);
+                else
+                    cText.WriteLine($"Processing integrated file '{file}'...", "JindiumCompiler", ConsoleColor.Cyan);
 
                 Files.Add(JindiumFile);
             }
@@ -138,7 +161,6 @@ namespace Jindium
             JindiumSite site = new JindiumSite(ComplieConfig.SiteName);
 
             site.Config = ComplieConfig;
-
             site.SetFiles(Files);
 
             cText.WriteLine($"Done! '{ComplieConfig.SiteName}' has now been converted to a Jindium site.", "JindiumCompiler", ConsoleColor.Cyan);

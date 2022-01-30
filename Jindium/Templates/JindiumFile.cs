@@ -11,6 +11,7 @@ namespace Jindium
     {
         public string MimeType { get; set; }
         public string Path { get; set; }
+        public string FullPath { get; set; }
         public byte[] Data { get; set; }
         public string Method { get; set; }
         public int StatusCode { get; set; }
@@ -24,13 +25,14 @@ namespace Jindium
             Data = StaticResp.ConvertText("Error, file is empty.");
         }
 
-        public JindiumFile(byte[] data, int statusCode = 200, string path = null, string method = "GET", string mimeType = "text/html")
+        public JindiumFile(byte[] data, int statusCode = 200, string path = null, string method = "GET", string mimeType = "text/html", string fullPath = null)
         {
             MimeType = mimeType;
             Path = path;
             Method = method;
             Data = data;
             StatusCode = statusCode;
+            FullPath = fullPath;
         }
 
         public string DataAsString()

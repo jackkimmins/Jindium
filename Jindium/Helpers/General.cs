@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Jindium
 {
-    partial class General
+    public partial class General
     {
         //Gets the MimeType from the file extension.
         public static string GetMimeType(string extension)

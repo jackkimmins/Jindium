@@ -28,7 +28,7 @@ namespace Jindium
         private HttpListener listener = new HttpListener();
         public List<Session> Sessions { get; set; }
         public List<Replacelet<string, object>> PublicReplacelets { get; set; }
-
+        public string ContentPath { get; set; }
         public string URL { get; set; }
 
         //Specify the URL to listen on.
@@ -37,6 +37,7 @@ namespace Jindium
             URL = _URL;
             Sessions = new List<Session>();
             PublicReplacelets = new List<Replacelet<string, object>>();
+            ContentPath = null;
         }
 
         //Add a custom header(s) to the response.
@@ -45,6 +46,29 @@ namespace Jindium
             args.res.Headers.Add("Server", "Jindium");
 
             return Task.CompletedTask;
+        }
+
+        //Set a public replacelet value.
+        public void Replacelet(string replaceletName, object value)
+        {
+            var replacelet = PublicReplacelets.Where(r => r.Key == replaceletName).FirstOrDefault();
+
+            //Check if the replacelet exists.
+            if (replacelet != null)
+            {
+                replacelet.Value = value;
+            }
+            else
+            {
+                PublicReplacelets.Add(Replacelets.New(replaceletName, value));
+            }
+        }
+
+        //Get a public replacelet value.
+        public object Replacelet(string replaceletName)
+        {
+            var replacelet = PublicReplacelets.Where(r => r.Key == replaceletName).FirstOrDefault();
+            return (replacelet != null) ? replacelet.Value : 0;
         }
 
         //Create a response for the user from a JindiumFile with the specified arguments.
@@ -58,36 +82,58 @@ namespace Jindium
                 return;
             }
 
-            //Apply replacelets to text-base files only, not things like images or binary files.
-            if (file.MimeType.StartsWith("text/"))
-            {
-                if (args.req.Cookies["JindiumSessID"] != null)
-                {
-                    file.DataFromString(Session.ApplySessionReplacelets(file.DataAsString(), this, args.req.Cookies["JindiumSessID"].Value));
-                }    
-
-                file.DataFromString(Replacelets.ApplyReplacelets(file.DataAsString(), PublicReplacelets.ToArray()));
-                file.DataFromString(Replacelets.ApplyReplacelets(file.DataAsString(), ServerReplacelets.Fetch()));
-                file.DataFromString(Replacelets.CheckForLeftOverReplacelets(file.DataAsString()));            
-
-                if (file.MimeType == "text/html")
-                {
-                    file.Data = General.Combine(Encoding.UTF8.GetBytes(StaticResp.FileTopComment()), file.Data);
-                }
-            }
-
             byte[] byteData = file.Data;
 
             //Set the response data.
             args.res.ContentType = contentType ?? file.MimeType;  
             args.res.ContentEncoding = Encoding.UTF8;
-            args.res.ContentLength64 = file.Data.LongLength;
             args.res.StatusCode = file.StatusCode;
-
             await AddCustomHeaders(ref args);
 
+            if (byteData == null)
+            {
+                //Check if the file exists at the specified path.
+                if (System.IO.File.Exists(file.FullPath))
+                {
+                    //If it does, load it into byteData;
+                    byteData = System.IO.File.ReadAllBytes(file.FullPath);
+                }
+                else
+                {
+                    //If it doesn't, return a 404.
+                    args.res.StatusCode = 404;
+                    args.res.StatusDescription = "Not Found";
+                    byteData = StaticResp.ConvertText("File was not found.");
+                    args.res.ContentType = "text/html";
+                }
+            }
+
+            //Apply replacelets to text-base files only, not things like images or binary files.
+            if (file.MimeType.StartsWith("text/"))
+            {
+                string textData = Encoding.UTF8.GetString(byteData);
+
+                if (args.req.Cookies["JindiumSessID"] != null)
+                {
+                    textData = Session.ApplySessionReplacelets(textData, this, args.req.Cookies["JindiumSessID"].Value);
+                }    
+
+                textData = Replacelets.ApplyReplacelets(textData, PublicReplacelets.ToArray());
+                textData = Replacelets.ApplyReplacelets(textData, ServerReplacelets.Fetch());
+                textData = Replacelets.CheckForLeftOverReplacelets(textData);
+
+                byteData = Encoding.UTF8.GetBytes(textData);
+
+                if (file.MimeType == "text/html")
+                {
+                    byteData = General.Combine(Encoding.UTF8.GetBytes(StaticResp.FileTopComment()), byteData);
+                }
+            }
+
+            args.res.ContentLength64 = byteData.LongLength;
+
             //Send the response asynchronously.
-            await args.res.OutputStream.WriteAsync(file.Data, 0, file.Data.Length);
+            await args.res.OutputStream.WriteAsync(byteData, 0, byteData.Length);
         }
 
         public event EventHandler<httpArgs> OnGET;
@@ -154,14 +200,17 @@ namespace Jindium
             Console.Title = site.Config.SiteName + " - Jindium Server";
             listener.Prefixes.Add(URL);
 
+            ContentPath = site.Config.CompileFolder;
+
             //Start the listener.
             try
             {
                 listener.Start();
             }
-            catch (HttpListenerException)
+            catch (HttpListenerException ex)
             {
                 cText.WriteLine($"Could not start the Jindimum on the following URI: {URL}", "ERR", ConsoleColor.Red);
+                cText.WriteLine("Reason: " + ex.Message, "ERR", ConsoleColor.Red);
                 return;
             }
 

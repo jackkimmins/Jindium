@@ -47,7 +47,7 @@ namespace Jindium
         {
             var file = handler(new JindiumFile());
             file.Path = path;
-            Console.WriteLine("New Static File: " + file.isSecure);
+            cText.WriteLine($"Initialised New Static File. Path: '{path}'", "JIN", ConsoleColor.Yellow);
 
             if (CheckEndpointExists(path))
             {
@@ -91,8 +91,11 @@ namespace Jindium
         }
 
         //Save the object to a file. using the serializer. This is a little hacky and could be done better, but it works.
-        public static void Save(JindiumSite site, string fileName)
+        public static void Save(JindiumSite site, string fileName = null)
         {
+            if (fileName == null)
+                fileName = site.Config.SiteName + ".jin";
+
             try
             {
                 Stream ms = File.OpenWrite(fileName);
@@ -103,6 +106,8 @@ namespace Jindium
                 ms.Flush();
                 ms.Close();
                 ms.Dispose();
+
+                cText.WriteLine($"Saved site to '{fileName}'", "JIN", ConsoleColor.Yellow);
             }
             catch (Exception e)
             {
